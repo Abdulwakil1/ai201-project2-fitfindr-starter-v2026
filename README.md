@@ -41,6 +41,8 @@
 
 <!-- Three or four sentences: what a user asks for, and what they get back. -->
 
+FitFindr is a three-tool agent for thrift shopping. A user asks in plain language for an item, such as "a vintage graphic tee under $30, size M", and the agent searches 40 clothing listings by keyword, size, and price ceiling. It takes the best match, asks a model to suggest outfits that combine it with pieces from the user's wardrobe (or general styling advice if the wardrobe is empty), and then writes a short caption someone could actually post. If nothing matches, the agent stops before the outfit step and tells the user what to change: broader words, a different size, or a higher price ceiling.
+
 ---
 
 ## Tool Inventory
@@ -95,9 +97,9 @@
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** <!-- regex, string splitting, or asking the model — say which -->
+**How the query is parsed:** Regex, in `agent.py::parse_query`, with no model call. A dollar amount ("under $30", "below", "max", "up to") becomes `max_price`; "size M" or a trailing ", M" becomes `size`; whatever is left is the description. It costs nothing and returns the same answer every time. It gives up on phrasing it has never seen: "nothing over thirty dollars" parses to no price, and the ceiling is silently ignored. <!-- regex, string splitting, or asking the model — say which -->
 
-**What moves through the session:** <!-- which fields, in what order -->
+**What moves through the session:** In order: `query` → `parsed` (description, size, max_price) → `search_results` (everything `search_listings` returned) → `selected_item` (the first result) → `outfit_suggestion` (from `suggest_outfit(selected_item, wardrobe)`) → `fit_card` (from `create_fit_card(outfit_suggestion, selected_item)`). Each tool's input is read back out of the session, not passed from the previous call's return value. On the empty-search branch, `error` is set and `selected_item`, `outfit_suggestion` and `fit_card` stay `None`. <!-- which fields, in what order -->
 
 ---
 
@@ -111,24 +113,97 @@
 **One full query**
 
 ```
-$ python app.py ask '...'
+$ python app.py ask 'vintage graphic tee under $30'
+Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+
+  Outfit:   Here are two practical, wearable outfits incorporating your new Y2K butterfly baby tee with pieces from your wardrobe:
+
+### Outfit 1: 2000s Streetwear Contrast
+This look balances the fitted, feminine energy of the baby tee with relaxed denim and chunky footwear.
+
+* **Top:** Y2K Baby Tee — Butterfly Print
+* **Bottoms:** Baggy straight-leg jeans, dark wash
+* **Outerwear:** Vintage black denim jacket (worn over top or casually draped over shoulders)
+* **Shoes:** Chunky white sneakers
+* **Accessories:** Black crossbody bag
+
+### Outfit 2: Casual Edgy Layering
+A slightly grungier take that plays with proportions by pairing the cropped tee with structured trousers and boots.
+
+* **Top:** Y2K Baby Tee — Butterfly Print
+* **Bottoms:** Wide-leg khaki trousers
+* **Outerwear:** Black cropped zip hoodie (worn open to let the pink and purple butterfly graphic peek through)
+* **Shoes:** Black combat boots
+* **Accessories:** Brown leather belt (to define the waist of the khaki trousers)
+
+  Fit card: Found my absolute dream tee and honestly still pinching myself. Tossed it over baggy denim today and it’s giving total early 2000s off-duty energy. Snagged this butterfly print baby tee for just $18 over on depop 🦋
+
+0 model calls this session, 2 served from cache
 
 ```
 
 **The three tools, tested one at a time**
 
 ```
-$ python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
+$ python -c "from tools import search_listings as s; r=s('graphic tee', max_price=30); print([(x['title'], x['price']) for x in r])"
+[('Y2K Baby Tee — Butterfly Print', 18.0), ('Graphic Tee — 2003 Tour Bootleg Style', 24.0), ('Mesh Long-Sleeve Top — Black', 15.0), ('Vintage Band Tee — Faded Grey', 19.0), ('Low-Rise Cargo Pants — Khaki', 27.0), ('Vintage Graphic Hoodie — Faded Black', 26.0)]
+
+$ python -c "from tools import search_listings as s; print(s('designer ballgown', size='XXS', max_price=5))"
+[]
+```
+
+```
+$ python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
+python -c "from tools import suggest_outfit; from utils.data_loader import get_empty_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_empty_wardrobe()))"
+Here are two practical, wearable outfits featuring your new Vintage Levi's 501 Jeans:
+
+**Outfit 1: Effortless Casual (Streetwear Vibe)**
+*   **Top:** White ribbed tank top
+*   **Footwear:** Chunky white sneakers
+*   **Accessories:** Black crossbody bag
+*   *Styling notes:* Tuck the white tank top fully into the 501s to define your waist. Finish with the chunky sneakers and crossbody bag for an easy, classic off-duty look.
+
+**Outfit 2: Cozy Layered (Chilly Day Vibe)**
+*   **Top:** Oversized grey crewneck sweatshirt
+*   **Footwear:** Black combat boots
+*   **Accessories:** Brown leather belt, Black crossbody bag
+*   *Styling notes:* Thread the brown leather belt through the jeans (letting a bit of the brown contrast with the medium wash). Cinch the oversized grey crewneck or do a half-tuck at the front. Ground the look with the black combat boots to add a touch of grunge to the vintage denim.
+The Vintage Levi’s 501 in medium wash is the ultimate denim holy grail. Because they are 100% cotton vintage denim, they have a structured, rigid feel that holds its shape and gets better with age. A W30L30 is a great versatile size that can be worn fitted or slightly relaxed depending on your natural waist/hip measurements.
+
+Here is how to style them, along with two complete, easy-to-recreate outfit formulas using wardrobe staples.
+
+### General Styling Rules for Vintage 501s:
+*   **Balance the volume:** Since 501s feature a straight leg and rigid fabric, pair them with eithersomething fitted on top (like a baby tee or a sleek bodysuit) to create contrast, or go intentionallyoversized (like an oversized blazer) for an effortless streetwear look.
+*   **Footwear is key:** A straight-leg hem hitting right at the ankle (L30) looks best with slim boots, retro sneakers (like Adidas Sambas or New Balance), or classic loafers.
+*   **Break them in:** Vintage denim softens up the more you wear them. Don't be afraid to cuff the hems once or twice if you want a cropped look.
+
+---
+
+### Outfit Idea 1: Casual Streetwear (Effortless & Cool)
+*This look plays on the streetwear tag, keeping things relaxed, comfortable, and classic.*
+
+*   **Top:** A heavyweight, boxy white crewneck t-shirt (tucked in at the front to define the waist).
+*   **Outerwear:** An oversized black faux-leather bomber jacket or a vintage canvas chore coat.
+*   **Shoes:** Retro low-profile sneakers (e.g., white leather sneakers with a hint of color).
+*   **Accessories:** A simple black leather belt with a silver buckle and a canvas tote bag.
+
+### Outfit Idea 2: Elevated Smart-Casual (Polished & Timeless)
+*This look dresses up the rugged denim for dinner, a casual office, or weekend errands.*
+
+*   **Top:** A fitted black ribbed long-sleeve top or a classic black turtleneck.
+*   **Outerwear:** An oversized grey houndstooth or plaid blazer worn open.
+*   **Shoes:** Pointed-toe black leather ankle boots (let the hem of the jeans rest just on top of the boot shaft) or classic black leather loafers.
+*   **Accessories:** A structured leather handbag and simple gold hoop earrings.
 
 ```
 
 ```
-$ python -c "from tools import suggest_outfit; ..."
+$ AI201_CACHE=0 python -c "from tools import create_fit_card; from utils.data_loader import load_listings; it=load_listings()[1]; print(it['title'], it['price'], it['platform']); print(create_fit_card('baggy jeans, white tank, chunky sneakers', it))"
+Y2K Baby Tee — Butterfly Print 18.0 depop
+Literal heaven right here. Snagged this butterfly baby tee for just $18 over on depop and it's about to be my whole personality. Pairing it with my baggiest denim and chunky kicks for max 2000s energy. 🦋
 
-```
-
-```
-$ python -c "from tools import create_fit_card; ..."
+$ python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(repr(create_fit_card('   ', load_listings()[0])))"
+'No fit card can be created without an outfit suggestion.'
 
 ```
 
@@ -145,15 +220,15 @@ $ python -c "from tools import create_fit_card; ..."
 
 **Moment 1**
 
-- _What I asked for:_
-- _What came back:_
-- _What I changed:_
+- _What I asked for:_ I gave Claude the instructor's `_size_matches` and `_size_tokens` helper and my Tool Inventory size rule (full string, or one whole token when split on `/` and whitespace), and asked whether the helper matched my spec.
+- _What came back:_ Three problems. `p.strip().upper` was missing its parentheses, so sizes were never uppercased. The helper split only on `/`, so "W30" would not match "W30 L30". Its "One Size matches any size" shortcut contradicted my README, which doesn't have that rule.
+- _What I changed:_ I told Copilot to fix `.upper()`, split on whitespace as well as `/`, and remove the One Size shortcut. Then I tested it myself instead of trusting the summary: the size matrix printed `True False False False True False True` (so "L" does not match "XL" or "W30 L30"), and a listing priced exactly at the ceiling was included while one priced a cent over was not.
 
 **Moment 2**
 
-- _What I asked for:_
-- _What came back:_
-- _What I changed:_
+- _What I asked for:_ I wrote my own acceptance criteria 3 to 5 and asked an AI only to attack them: for each one, how would it test it from the sentence alone, without rewriting it.
+- _What came back:_ My first drafts could not be tested as written. "Return the title being searched" didn't say which title or where, and a brand check can't work because `brand` is `None` for most listings. In later rounds it found that my state criterion compared only two downstream values and never the first search result, that "4 of 5" could be read as covering only part of the fit-card requirement, and that the price criterion could pass vacuously on an empty result.
+- _What I changed:_ I rewrote the criteria myself each round. The state criterion now compares three ids (`session["selected_item"]`, the first `search_listings` result, and the `new_item` that reached `suggest_outfit`). The fit-card criterion puts both the sentence count and the title, price and platform under the "4 of 5". The price criterion requires test cases with listings both below and above the ceiling.
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
