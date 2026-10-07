@@ -20,9 +20,37 @@ That last line is what your loop branches on. "Returns a list" earns nothing —
 the description has to say what is *in* the list.
 """
 
+import re
+
 import config  # noqa: F401 — you'll use this in search_listings
 from generate import generate
 from utils.data_loader import load_listings
+
+
+_STOPWORDS = {
+    "a", "an", "and", "the", "for", "with", "under", "over", "in", "of"
+}
+
+
+def _keywords(text: str) -> set[str]:
+    """Lowercase words worth matching on, stopwords removed."""
+    words = re.findall(r"[a-z0-9']+", (text or "").lower())
+    return {word for word in words if word not in _STOPWORDS and len(word) > 1}
+
+
+def _size_tokens(size: str) -> set[str]:
+    cleaned = re.sub(r"\([^)]*\)", " ", size or "")
+    parts = re.split(r"[/\s]+", cleaned.upper())
+    return {part for part in parts if part}
+
+
+def _size_matches(wanted: str, listing_size: str) -> bool:
+    if not wanted:
+        return True
+    cleaned_listing = re.sub(r"\([^)]*\)", " ", listing_size or "")
+    normalized_wanted = " ".join((wanted or "").upper().split())
+    normalized_listing = " ".join(cleaned_listing.upper().split())
+    return normalized_wanted == normalized_listing or normalized_wanted in _size_tokens(listing_size)
 
 
 # ── Tool 1: search_listings ───────────────────────────────────────────────────
@@ -78,8 +106,30 @@ def search_listings(
     Test it from a terminal before you move on:
         python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
     """
-    # TODO: replace this with your implementation
-    return []
+    requested_keywords = _keywords(description)
+    matches = []
+
+    for listing in load_listings():
+        if max_price is not None and listing["price"] > max_price:
+            continue
+        if size is not None and not _size_matches(size, listing.get("size", "")):
+            continue
+
+        searchable_text = " ".join(
+            [
+                listing.get("title", ""),
+                listing.get("description", ""),
+                listing.get("category", ""),
+                " ".join(listing.get("style_tags", [])),
+                " ".join(listing.get("colors", [])),
+            ]
+        )
+        score = len(requested_keywords & _keywords(searchable_text))
+        if score:
+            matches.append((score, listing))
+
+    matches.sort(key=lambda match: match[0], reverse=True)
+    return [listing for _, listing in matches[: config.SEARCH_RESULT_LIMIT]]
 
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
@@ -112,8 +162,47 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    items = wardrobe.get("items") or []
+    item_details = (
+        f"Name: {new_item.get('title', new_item.get('name', 'Unknown item'))}\n"
+        f"Category: {new_item.get('category', '')}\n"
+        f"Colors: {', '.join(new_item.get('colors', []))}\n"
+        f"Style tags: {', '.join(new_item.get('style_tags', []))}\n"
+        f"Size: {new_item.get('size', '')}\n"
+        f"Condition: {new_item.get('condition', '')}"
+    )
+
+    if not items:
+        prompt = (
+            "No wardrobe was provided. Give general styling advice for this new item, "
+            "suggesting one or two outfit ideas without assuming the user owns any "
+            "specific pieces.\n\n"
+            f"New item:\n{item_details}"
+        )
+    else:
+        wardrobe_details = []
+        for index, item in enumerate(items, start=1):
+            notes = f"; Notes: {item['notes']}" if item.get("notes") else ""
+            wardrobe_details.append(
+                f"{index}. Name: {item.get('name', '')}; "
+                f"Category: {item.get('category', '')}; "
+                f"Colors: {', '.join(item.get('colors', []))}; "
+                f"Style tags: {', '.join(item.get('style_tags', []))}"
+                f"{notes}"
+            )
+        prompt = (
+            "Suggest one or two outfits combining the new item with specific pieces "
+            "from the user's wardrobe. Name the owned pieces in each outfit and do "
+            "not invent wardrobe items.\n\n"
+            f"New item:\n{item_details}\n\n"
+            "User wardrobe:\n" + "\n".join(wardrobe_details)
+        )
+
+    response = generate(
+        prompt,
+        system="You are a practical personal stylist. Keep suggestions specific and wearable.",
+    )
+    return response.strip() or "No outfit suggestions were generated."
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
@@ -152,5 +241,24 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    if not outfit or not outfit.strip():
+        return "No fit card can be created without an outfit suggestion."
+
+    price = f"${new_item['price']:.2f}"
+    if price.endswith(".00"):
+        price = price[:-3]
+    prompt = (
+        "Write a two-to-four sentence social media caption for this thrift find. "
+        "Make it sound like a real social post, not a product description. Mention "
+        "the item, its price, and its platform exactly once each, and make the vibe "
+        "specific. Use no hashtags and at most one emoji.\n\n"
+        f"Item: {new_item.get('title', 'Unknown item')}\n"
+        f"Price: {price}\n"
+        f"Platform: {new_item.get('platform', '')}\n"
+        f"Outfit: {outfit.strip()}"
+    )
+    response = generate(
+        prompt,
+        system="You are a concise stylist writing authentic social captions.",
+    )
+    return response.strip() or "No fit card caption was generated."
