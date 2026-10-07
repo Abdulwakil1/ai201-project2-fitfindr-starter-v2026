@@ -12,7 +12,7 @@ Build and test your three tools in `tools.py` first. Then come here.
 
     python agent.py          runs both example paths below
 """
-
+import re
 import config
 import trace
 from tools import search_listings, suggest_outfit, create_fit_card
@@ -46,7 +46,60 @@ def new_session(query: str, wardrobe: dict) -> dict:
         "error": None,               # set when the run ended early
     }
 
+# ── parsing the query ─────────────────────────────────────────────────────────
 
+# Sizes a user is likely to type, matched as whole words.
+_SIZE_WORDS = r"XXS|XS|S|M|L|XL|XXL"
+
+_PRICE_RE = re.compile(r"(?:under|below|less than|max|up to)?\s*\$\s*(\d+(?:\.\d+)?)", re.I)
+_SIZE_RE = re.compile(rf"\bsize\s+({_SIZE_WORDS}|US\s*\d+(?:\.\d+)?|W\d+)\b", re.I)
+_BARE_SIZE_RE = re.compile(rf",\s*({_SIZE_WORDS})\s*$", re.I)
+
+
+def parse_query(query: str) -> dict:
+    """
+    Pull a description, a size and a price ceiling out of what the user typed.
+
+    Regex, not a model call: it costs nothing, returns the same answer every
+    time, and a wrong parse is readable in the pattern. It gives up phrasing it
+    has never seen ("nothing over thirty dollars" parses to no price).
+    """
+    text = query or ""
+
+    max_price = None
+    price_match = _PRICE_RE.search(text)
+    if price_match:
+        max_price = float(price_match.group(1))
+        text = text[: price_match.start()] + " " + text[price_match.end():]
+
+    size = None
+    size_match = _SIZE_RE.search(text) or _BARE_SIZE_RE.search(text)
+    if size_match:
+        size = re.sub(r"\s+", " ", size_match.group(1)).strip().upper()
+        text = text[: size_match.start()] + " " + text[size_match.end():]
+
+    description = re.sub(r"[,\s]+", " ", text).strip(" ,")
+    return {"description": description, "size": size, "max_price": max_price}
+
+
+def _nothing_found_message(parsed: dict) -> str:
+    """What to say when the search comes back empty: names what the user can change."""
+    tried = [f"description {parsed['description']!r}"]
+    if parsed["size"]:
+        tried.append(f"size {parsed['size']}")
+    if parsed["max_price"] is not None:
+        tried.append(f"under ${parsed['max_price']:g}")
+
+    suggestions = ["try broader words — 'jacket' finds more than 'cropped corduroy jacket'"]
+    if parsed["size"]:
+        suggestions.append("drop the size, or try a neighbouring one")
+    if parsed["max_price"] is not None:
+        suggestions.append(f"raise the price ceiling above ${parsed['max_price']:g}")
+
+    return (
+        "Nothing in the listings matched " + ", ".join(tried) + ".\n"
+        "Things to change: " + "; ".join(suggestions) + "."
+    )
 # ── planning loop ─────────────────────────────────────────────────────────────
 
 def run_agent(query: str, wardrobe: dict) -> dict:
@@ -106,9 +159,40 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         than a stack trace. The import is already at the top of this file.
     """
     session = new_session(query, wardrobe)
+    steps = 0
 
-    # TODO: delete these two lines and build the loop.
-    session["error"] = "The planning loop isn't built yet — see the TODO in agent.py."
+    steps += 1
+    trace.check_iterations(steps)
+    session["parsed"] = parse_query(query)
+
+    steps += 1
+    trace.check_iterations(steps)
+    parsed = session["parsed"]
+    session["search_results"] = search_listings(
+        parsed["description"], parsed["size"], parsed["max_price"]
+    )
+
+    # ── THE BRANCH ────────────────────────────────────────────────────────
+    if not session["search_results"]:
+        session["error"] = _nothing_found_message(session["parsed"])
+        return session
+
+    steps += 1
+    trace.check_iterations(steps)
+    session["selected_item"] = session["search_results"][0]
+
+    steps += 1
+    trace.check_iterations(steps)
+    session["outfit_suggestion"] = suggest_outfit(
+        session["selected_item"], session["wardrobe"]
+    )
+
+    steps += 1
+    trace.check_iterations(steps)
+    session["fit_card"] = create_fit_card(
+        session["outfit_suggestion"], session["selected_item"]
+    )
+
     return session
 
 
