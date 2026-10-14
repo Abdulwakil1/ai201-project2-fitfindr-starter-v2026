@@ -315,15 +315,22 @@ The 'jeans' pair was first ('jeans', 40), which had no listing above the ceiling
      Look for a pattern. Three misses on the same tool is one problem, not
      three. -->
 
-| #   | Criterion | Target | Verdict | How I decided |
-| --- | --------- | ------ | ------- | ------------- |
-| 1   |           |        |         |               |
-| 2   |           |        |         |               |
-| 3   |           |        |         |               |
-| 4   |           |        |         |               |
-| 5   |           |        |         |               |
+| #   | Criterion                                | Target | Verdict      | How I decided                                                                                                                                            |
+| --- | ---------------------------------------- | ------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Matching query completes all three tools | 4 of 5 | MET (5/5)    | All five tries of 'vintage graphic tee under $30' ran parse, search, select, outfit and fit card with no crash and no early stop.                        |
+| 2   | Impossible query stops early             | 5 of 5 | MET (5/5)    | All five tries hit the branch step, never called suggest_outfit, and returned the message naming what to change.                                         |
+| 3   | State: ids match                         | 5 of 5 | MET (5/5)    | check_c3_c5.py compared the first search result, selected_item and the suggest_outfit input over five runs: lst_002 every time.                          |
+| 4   | Fit card structure and details           | 4 of 5 | MISSED (0/5) | score_c4.py applied my written rule to five cards for 'vintage windbreaker under $50': every card failed the title check, and two also missed the price. |
+| 5   | Price ceiling                            | 5 of 5 | MET (5/5)    | Five direct search_listings calls, each with matches on both sides of the ceiling; nothing over the ceiling came back.                                   |
 
 **Diagnoses**
+**Criterion 4 (MISSED, 0/5).** Place: the model's output, produced by `tools.py::create_fit_card`. Mechanism: the prompt asks the model to mention "the item" and gives it the full title, but never requires the exact title or the digit form of the price, so the model paraphrases. All five cards said things like "color block windbreaker" or "90s windbreaker" instead of "Vintage Windbreaker", and tries 2 and 3 wrote "forty bucks" instead of "$40". Sentence count and platform passed on every try, so the structure is fine; the failures are the two details the prompt leaves loose. The tool ran correctly; the prompt's instruction was too soft for the rule I wrote.
+
+**Pattern.** One miss, one tool: criterion 4 is the only miss, and it traces to `tools.py::create_fit_card`, which is where the model's output varies. Criteria 2, 3 and 5 involve no model call and passed 5 of 5, which fits: deterministic steps held and the model-dependent step did not.
+
+**Were my targets too easy?** Criterion 1 (target 4 of 5) went 5 of 5, so I would tighten it to 5 of 5. The 4-of-5 allowance was meant for keyword-search misses, and this query had none. Criteria 3 and 5 were met on deterministic steps, so they say little about the model. One limit none of my criteria measure: search matching is loose. 'vintage graphic tee under $30' returned 10 matches, and 'chunky platform sneakers under $45' ranked a knit cardigan first, so "matches" in criterion 1 can be satisfied by a weak match.
+
+**Criterion revisions:** none. Criterion 4 was measurable and I missed it, so I left the original line and target unchanged.
 
 ---
 
