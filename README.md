@@ -257,20 +257,43 @@ $ python -c "from tools import create_fit_card; from utils.data_loader import lo
      `python run_eval.py --label before` runs everything and writes the table
      into results/. Paste it here and fill in the verdicts. -->
 
-| Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
-| --------- | ------ | ----- | ----- | ----- | ----- | ----- | ------- |
-| 1.        |        |       |       |       |       |       |         |
-| 2.        |        |       |       |       |       |       |         |
-| 3.        |        |       |       |       |       |       |         |
-| 4.        |        |       |       |       |       |       |         |
-| 5.        |        |       |       |       |       |       |         |
+| Criterion                                                          | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict      |
+| ------------------------------------------------------------------ | ------ | ----- | ----- | ----- | ----- | ----- | ------------ |
+| 1. Matching query completes all three tools and returns a fit card | 4 of 5 | PASS  | PASS  | PASS  | PASS  | PASS  | MET (5/5)    |
+| 2. Impossible query stops before suggest_outfit with a message     | 5 of 5 | PASS  | PASS  | PASS  | PASS  | PASS  | MET (5/5)    |
+| 3. Selected item id matches search result and suggest_outfit input | 5 of 5 | PASS  | PASS  | PASS  | PASS  | PASS  | MET (5/5)    |
+| 4. Fit card is 2-4 sentences with title, price and platform        | 4 of 5 | FAIL  | FAIL  | FAIL  | FAIL  | FAIL  | MISSED (0/5) |
+| 5. Price ceiling respected over 5 direct calls                     | 5 of 5 | PASS  | PASS  | PASS  | PASS  | PASS  | MET (5/5)    |
 
 **Real output from one try**, pasted as text, naming the file and function
 that produced it:
 
 ```
+Criterion 1: run_eval.py console, matching query 'vintage graphic tee under $30', try 1:
+try 1: completed — fit card 141 chars
 
+Criterion 2: results/run_2026-10-14_0116_before.md, produced by agent.py::run_agent (_nothing_found_message), try 1:
+Nothing in the listings matched description 'designer ballgown', size XXS, under $5.
+Things to change: try broader words — 'jacket' finds more than 'cropped corduroy jacket'; drop the size, or try a neighbouring one; raise the price ceiling above $5.
+
+Criterion 3: check_c3_c5.py (spy on agent.py::suggest_outfit):
+C3 try 1: first=lst_002 selected=lst_002 received=lst_002 -> PASS
+C3: 5/5
+
+Criterion 4: same results file, produced by tools.py::create_fit_card, query 'vintage windbreaker under $50', try 1:
+Pulled this purple and teal 90s windbreaker off thredUp for $40 and it instantly unlocked every effortless streetwear fit in my head. Paired it with baggy denim and chunky sneakers today for the ultimate throwback Saturday look. ⚡️
+Scored by score_c4.py: sentences=3 title=False price=True platform=True -> FAIL
+
+Criterion 5: check_c3_c5.py calling tools.py::search_listings:
+C5 'graphic tee' <= 20: setup ok, 3 results, highest 19.0 -> PASS
+C5 'jacket' <= 40: setup ok, 1 results, highest 33.0 -> PASS
+C5 'jeans' <= 35: setup ok, 1 results, highest 30.0 -> PASS
+C5 'sneakers' <= 30: setup ok, 1 results, highest 20.0 -> PASS
+C5 'top' <= 20: setup ok, 2 results, highest 20.0 -> PASS
+C5: 5/5
 ```
+
+The 'jeans' pair was first ('jeans', 40), which had no listing above the ceiling, so I changed it to ('jeans', 35) because the setup was invalid, not because it failed.
 
 ---
 
