@@ -230,6 +230,12 @@ $ python -c "from tools import create_fit_card; from utils.data_loader import lo
 - _What came back:_ My first drafts could not be tested as written. "Return the title being searched" didn't say which title or where, and a brand check can't work because `brand` is `None` for most listings. In later rounds it found that my state criterion compared only two downstream values and never the first search result, that "4 of 5" could be read as covering only part of the fit-card requirement, and that the price criterion could pass vacuously on an empty result.
 - _What I changed:_ I rewrote the criteria myself each round. The state criterion now compares three ids (`session["selected_item"]`, the first `search_listings` result, and the `new_item` that reached `suggest_outfit`). The fit-card criterion puts both the sentence count and the title, price and platform under the "4 of 5". The price criterion requires test cases with listings both below and above the ceiling.
 
+**Moment 3 (Unit 4)**
+
+- _What I asked for:_ I gave Claude my criterion 4 rule (written before the run) and the five fit cards, and asked how to diagnose the 0 of 5 result.
+- _What came back:_ The diagnosis that my `create_fit_card` prompt only said "mention the item", so the model paraphrased the title and sometimes wrote the price in words, and a suggestion to tighten that one sentence.
+- _What I changed:_ I made only that one prompt change, kept the scoring rule unchanged, and reran with the cache off. I scored the new cards with the same `score_c4.py`: 5 of 5, up from 0 of 5.
+
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
      Don't fill these in during unit 3.
