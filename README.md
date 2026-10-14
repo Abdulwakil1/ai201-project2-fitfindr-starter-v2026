@@ -352,7 +352,7 @@ python app.py ask 'designer ballgown size XXS under $5' --trace
 
 Message check (fresh chat): messages 1 and 3 gave something to try. Message 2 did not, because the advice never says the wardrobe was empty. Not changed in this unit.
 
-**On the MCP move:** <!-- what changed in your code, and whether anything
+**On the MCP move:** `search_listings` now runs through the MCP server (`mcp_server.py`), and `agent.py::run_agent` calls it with `mcp_client.call_tool("search_listings", {...})` instead of calling the function directly. The output was identical to Unit 3 on both paths: the same item (Y2K Baby Tee, $18.0, depop) for the matching query, and an empty list for the impossible query, so the branch still stopped before `suggest_outfit`. A direct check returned `list 6` for 'graphic tee' under $30, matching the direct call. It is slower, because each call starts the server. <!-- what changed in your code, and whether anything
 behaved differently afterwards. If the rewire didn't work, say exactly where it
 broke — the error text and the last thing that worked. That earns the point in
 full. -->
