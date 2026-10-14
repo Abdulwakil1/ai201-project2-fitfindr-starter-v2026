@@ -239,6 +239,15 @@ $ python -c "from tools import create_fit_card; from utils.data_loader import lo
 
 ## Run Log — Before
 
+**Scoring rules (written before running):**
+
+- **Criterion 1 passes** when all three tools ran and a non-empty fit card came back: no crash and no early stop.
+- **Criterion 2 passes** when the run stopped before `suggest_outfit`, `fit_card` is `None`, and the message names what to change.
+- **Criterion 3 passes** when the `id` in `session["selected_item"]` equals the `id` of the first `search_listings` result and the `id` of the item that reached `suggest_outfit`.
+- **Criterion 4 passes** when the fit card is 2 to 4 sentences AND contains the item's title (the part before the dash, case-insensitive) AND its price (for example `$40`) AND its platform.
+- **Criterion 5 passes** when every listing returned has a price at or below the ceiling, and the test case has matching listings both at or below and above the ceiling.
+- Criteria 3 and 4 are tested by running one matching query five times. I did not change these rules after seeing results.
+
 <!-- Five criteria, five tries each, in this exact format.
 
      Five, because your criteria are written out of five. Mark each try PASS

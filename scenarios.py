@@ -28,13 +28,15 @@ SCENARIOS = [
         "wardrobe": "example",
         "criterion": 2,
     },
+    
     {
-        # A user with nothing saved. One of unit 4's three failure modes.
-        "name": "empty wardrobe",
-        "query": "denim jacket under $50",
-        "wardrobe": "empty",
-        "criterion": None,
+        # The fit card. Criterion 4: same query, five tries, model wording varies.
+        "name": "fit card: structure and details",
+        "query": "vintage windbreaker under $50",
+        "wardrobe": "example",
+        "criterion": 4,
     },
+    # TODO: add what your criteria 3, 4 and 5 need.
     # TODO: add what your criteria 3, 4 and 5 need.
     #
     # Set "criterion" to the number in criteria.md that the scenario tests.
