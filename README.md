@@ -310,14 +310,47 @@ that produced it:
 **Happy path**
 
 ```
+python app.py ask 'vintage graphic tee under $30' --trace
+[1] parse_query
+      in:  vintage graphic tee under $30
+      out: {'description': 'vintage graphic tee', 'size': None, 'max_price': 30.0}
+[2] search_listings (via MCP)
+      in:  {'description': 'vintage graphic tee', 'size': None, 'max_price': 30.0}
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
+      →    10 match(es)
+[3] select_item
+      out: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+[4] suggest_outfit
+      in:  Y2K Baby Tee — Butterfly Print ($18.0, depop)
+      out: Here are two practical, wearable outfits incorporating your new Y2K butterfly baby tee with piecesfrom your w…
+[5] create_fit_card
+      in:  Y2K Baby Tee — Butterfly Print ($18.0, depop)
+      out: Found my absolute dream tee and honestly still pinching myself. Tossed it over baggy denim today and it’s givi…
 
 ```
 
 **Empty search**
 
 ```
-
+python app.py ask 'designer ballgown size XXS under $5' --trace
+[1] parse_query
+      in:  designer ballgown size XXS under $5
+      out: {'description': 'designer ballgown', 'size': 'XXS', 'max_price': 5.0}
+[2] search_listings (via MCP)
+      in:  {'description': 'designer ballgown', 'size': 'XXS', 'max_price': 5.0}
+      out: [] (empty)
+      →    0 match(es)
+[3] branch
+      →    search returned []: stopping before suggest_outfit
 ```
+
+**Failure modes triggered on purpose**
+
+1. Empty search ('designer ballgown size XXS under $5'): stopped before suggest_outfit with "Nothing in the listings matched description 'designer ballgown', size XXS, under $5" and three things to change.
+2. Empty wardrobe ('vintage windbreaker under $50' --empty-wardrobe): returned general styling advice, no crash and no empty string.
+3. Model unavailable (one character of the key changed, new query): stopped after the search with "The model couldn't be reached... The search worked: 2 listing(s) were found. Check GEMINI_API_KEY in your .env." No stack trace.
+
+Message check (fresh chat): messages 1 and 3 gave something to try. Message 2 did not, because the advice never says the wardrobe was empty. Not changed in this unit.
 
 **On the MCP move:** <!-- what changed in your code, and whether anything
 behaved differently afterwards. If the rewire didn't work, say exactly where it
